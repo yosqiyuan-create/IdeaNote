@@ -109,6 +109,10 @@ nav button.on{color:#3B2C00;font-weight:700}
 .ideas button{border:1px solid #E6C65A;background:#fff;border-radius:18px;padding:8px 12px;font:inherit;font-size:14px;color:var(--ink)}
 .ideas button.used{opacity:.4}
 .badge{font-size:12px;margin-left:4px}
+.aistat{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:12px}
+.aichip{font-size:12px;border-radius:12px;padding:4px 10px;line-height:1.4}
+.aichip.ok{background:#EAF6EA;color:#2E6B2E}
+.aichip.out{background:#FDECEC;color:#B03A36;font-weight:700}
 </style>
 </head>
 <body>
@@ -142,6 +146,7 @@ nav button.on{color:#3B2C00;font-weight:700}
         <button class="btn sub" id="upBtn">⬆ 一つ上へ</button>
         <button class="btn sub" id="topBtn">🏠 最初へ</button>
       </div>
+      <div class="aistat"></div>
       <div class="row"><button class="btn sub" id="askBtn">💬 AIに質問</button></div>
       <div class="concl">
         <h4>🏁 結論を出す（曼荼羅全体から）</h4>
@@ -171,6 +176,9 @@ nav button.on{color:#3B2C00;font-weight:700}
     <label>使うAIのモデル</label>
     <select id="modelSel"></select>
     <p class="hint" id="modelHint" style="margin-top:6px"></p>
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin-top:10px"><input type="checkbox" id="smartChk" style="width:20px;height:20px"> 質問と結論は賢いAIを使う（おすすめ）</label>
+    <p class="hint" style="margin:4px 0 0">8マスは軽いAI、質問と結論は賢いAIで答えます。賢いAIの無料枠を使い切ると、自動で軽いAIに切り替わります。</p>
+    <div class="kv" style="margin-top:6px"><span>賢いAI</span><span id="smartName" style="font-size:12px"></span></div>
   </div>
   <div class="card">
     <h2>🔄 アプリの更新</h2>
@@ -181,6 +189,7 @@ nav button.on{color:#3B2C00;font-weight:700}
   <div class="card">
     <h2>📊 今日のAI使用</h2>
     <div class="kv"><span>今日AIを使った回数</span><span id="todayCount">0回</span></div>
+    <div class="aistat" style="justify-content:flex-start"></div>
     <p class="hint" style="margin-top:8px">無料枠の上限はGoogleの都合で変わります。AIが止まったら、明日まで待つか、マスに自分で書き込んで続けてください。</p>
   </div>
   <div class="card">
@@ -212,7 +221,7 @@ nav button.on{color:#3B2C00;font-weight:700}
 <div id="toast"></div>
 
 <script>
-const VERSION = "v3.1";
+const VERSION = "v3.3";
 const KEY = "ideaNote.v2";   // 保存場所の名前。バージョンが変わっても変えない
 const API = "https://generativelanguage.googleapis.com/v1beta";
 const FALLBACK_MODELS = ["gemini-3.5-flash-lite","gemini-3.1-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
@@ -314,7 +323,7 @@ function renderMandala(anim){
   g.querySelectorAll(".cell").forEach(el=>el.onclick=()=>onCell(el));
   $("#editBtn").classList.toggle("on",editMode);
   $("#editBtn").textContent = editMode ? "✏️ 書き込み中（押して終了）" : "✏️ 書き込み";
-  $("#aiBtn").disabled=busy; $("#askBtn").disabled=busy; $("#execBtn").disabled=busy; $("#bizBtn").disabled=busy; renderSaved(); $("#upBtn").disabled=!node.parent; $("#topBtn").disabled=!node.parent;
+  $("#aiBtn").disabled=busy; $("#askBtn").disabled=busy; $("#execBtn").disabled=busy; $("#bizBtn").disabled=busy; renderSaved(); renderAIStatus(); $("#upBtn").disabled=!node.parent; $("#topBtn").disabled=!node.parent;
   const used=filledCount(node);
   $("#status").textContent = busy ? "AIが考えています…" :
     pendingIdea ? `「${pendingIdea.text}」と入れ替えるマスを押してください（中央を押すとやめる）` :
@@ -386,10 +395,59 @@ $("#sheet").onclick=e=>{ if(e.target.id==="sheet") closeSheet(); };
 
 /* ---------- Gemini ---------- */
 function countUse(){ const d=today(); cfg.usage={[d]:(cfg.usage[d]||0)+1}; saveCfg(); }
-function modelCandidates(){
-  const list=[cfg.model, ...(cfg.models||[]), ...FALLBACK_MODELS].filter(Boolean);
-  return [...new Set(list)];
+
+/* ---------- 無料枠の使い切り管理 ---------- */
+// Geminiの1日の無料枠は、アメリカ太平洋時間の0時（日本時間16〜17時ごろ）に戻る
+function nextReset(){
+  const p=Object.fromEntries(new Intl.DateTimeFormat("en-US",{timeZone:"America/Los_Angeles",hour12:false,hour:"2-digit",minute:"2-digit",second:"2-digit"})
+    .formatToParts(new Date()).map(x=>[x.type,x.value]));
+  const h=(+p.hour)%24, passed=(h*3600+(+p.minute)*60+(+p.second))*1000;
+  return Date.now()+(86400000-passed)+60000;
 }
+function resetLabel(ts){
+  const d=new Date(Math.round((ts-60000)/300000)*300000), now=new Date();
+  const day = d.toDateString()===now.toDateString() ? "今日" : "明日";
+  return `${day}${d.getHours()}:${String(d.getMinutes()).padStart(2,"0")}ごろ`;
+}
+const isLite = n => /lite/.test(n);
+function isOut(model){ return (cfg.out?.[model]||0) > Date.now(); }
+function markOut(model){ cfg.out=cfg.out||{}; cfg.out[model]=nextReset(); saveCfg(); }
+function cleanOut(){ if(!cfg.out) return; for(const k in cfg.out) if(cfg.out[k]<=Date.now()) delete cfg.out[k]; }
+function strongList(){
+  const ver = n => (n.match(/(\d+(?:\.\d+)?)/)||[0,0])[1]*1;
+  return (cfg.models||[]).filter(n=>!isLite(n))
+    .sort((a,b)=>((/preview/.test(b)?-500:0)+ver(b)*10)-((/preview/.test(a)?-500:0)+ver(a)*10));
+}
+function liteList(){
+  return [...new Set([cfg.model,...(cfg.models||[]),...FALLBACK_MODELS].filter(n=>n&&isLite(n)))];
+}
+// 状態：{ok:true} または {ok:false, reset:時刻}
+function kindStatus(kind){
+  cleanOut();
+  const list = kind==="smart" ? strongList().slice(0,3) : liteList().slice(0,3);
+  if(!list.length) return {ok:kind==="lite", none:true};
+  const alive=list.filter(m=>!isOut(m));
+  if(alive.length) return {ok:true, model:alive[0]};
+  return {ok:false, reset:Math.min(...list.map(m=>cfg.out[m]))};
+}
+function modelCandidates(smart){
+  cleanOut();
+  const lite=liteList().slice(0,3);
+  const strong=strongList().slice(0,3);
+  const list = (!smart || cfg.smart===false) ? [...lite, ...strong] : [...strong, ...lite];
+  return list.filter(m=>!isOut(m));
+}
+function aiStatusHTML(){
+  const s=kindStatus("smart"), l=kindStatus("lite");
+  const chip=(label,st)=> st.none ? "" : st.ok
+    ? `<span class="aichip ok">${label} ✅ 使える</span>`
+    : `<span class="aichip out">${label} 🚫 今日は使い切り（${resetLabel(st.reset)}に復活）</span>`;
+  return chip("🧠 賢いAI",cfg.smart===false?{none:true}:s) + chip("⚡ 軽いAI",l);
+}
+function renderAIStatus(){
+  document.querySelectorAll(".aistat").forEach(el=>el.innerHTML = cfg.apiKey ? aiStatusHTML() : "");
+}
+
 async function listModels(key){
   const r=await fetch(`${API}/models?pageSize=1000`,{headers:{"x-goog-api-key":key}});
   if(!r.ok) throw await apiError(r);
@@ -407,19 +465,29 @@ async function apiError(r){
   const e=new Error(msg); e.status=r.status; e.raw=msg; return e;
 }
 function friendly(e){
+  if(e.allOut) return `🚫 今日のAIの無料枠をすべて使い切りました。${resetLabel(e.reset)}に復活します。それまではマスに自分で書き込んで続けられます`;
+  if(e.perMinute) return "⏳ 短い時間に使いすぎました。1分ほど待ってからもう一度押してください";
   if(e.status===400 && /api key/i.test(e.raw)) return "APIキーが正しくないようです。⚙️設定を確認してください";
   if(e.status===403) return "このAPIキーでは使えません。キーを作り直してみてください";
-  if(e.status===429) return "今日の無料枠を使い切ったか、短い時間に使いすぎました。少し待つか、マスに自分で書き込んで続けてください";
+  if(e.status===429) return "AIの無料枠の上限に届きました。少し待つか、マスに自分で書き込んで続けてください";
   if(e.status>=500) return "Google側が混んでいるようです。少し待ってもう一度押してください";
   if(!e.status) return "通信できませんでした。電波を確認してください";
   return "AIでエラーが出ました（"+e.status+"）";
 }
-async function callGemini(prompt, schema={type:"ARRAY",items:{type:"STRING"}}, temperature=1){
-  let lastErr;
-  for(const model of modelCandidates().slice(0,4)){
+let lastModel="";
+async function callGemini(prompt, schema={type:"ARRAY",items:{type:"STRING"}}, temperature=1, smart=false){
+  const cands=modelCandidates(smart);
+  if(!cands.length){
+    const ls=kindStatus("lite"), ss=kindStatus("smart");
+    throw Object.assign(new Error("all out"),{status:429,allOut:true,reset:Math.min(ls.reset||Infinity,ss.reset||Infinity)});
+  }
+  let lastErr, newlyOut=[];
+  for(const model of cands){
+    if(isOut(model)) continue;
+    let r;
     try{
       countUse();
-      const r=await fetch(`${API}/models/${model}:generateContent`,{
+      r=await fetch(`${API}/models/${model}:generateContent`,{
         method:"POST",
         headers:{"Content-Type":"application/json","x-goog-api-key":cfg.apiKey},
         body:JSON.stringify({
@@ -427,17 +495,33 @@ async function callGemini(prompt, schema={type:"ARRAY",items:{type:"STRING"}}, t
           generationConfig:{temperature,responseMimeType:"application/json",responseSchema:schema}
         })
       });
-      if(!r.ok){
-        const e=await apiError(r);
-        // モデルが無い／無料枠で使えないときは次のモデルを試す
-        if(e.status===404 || (e.status===429 && /limit:\s*0\b/.test(e.raw)) || (e.status===400 && /model/i.test(e.raw) && !/api key/i.test(e.raw))){ lastErr=e; continue; }
-        throw e;
+    }catch(e){ throw e; }   // 通信エラー
+    if(!r.ok){
+      const e=await apiError(r);
+      if(e.status===429){
+        if(/per\s*minute|PerMinute|RPM/i.test(e.raw) && !/per\s*day|PerDay/i.test(e.raw)){ e.perMinute=true; throw e; }
+        markOut(model); newlyOut.push(model); lastErr=e; continue;   // このモデルは今日は使い切り → 次へ
       }
-      const j=await r.json();
-      const text=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
-      if(model!==cfg.model){ cfg.model=model; saveCfg(); }
-      return text;
-    }catch(e){ if(e.status) throw e; lastErr=e; throw e; }
+      if(e.status===404 || (e.status===400 && /model/i.test(e.raw) && !/api key/i.test(e.raw))){ lastErr=e; continue; }
+      throw e;
+    }
+    const j=await r.json();
+    const text=(j.candidates?.[0]?.content?.parts||[]).map(p=>p.text||"").join("");
+    if(isLite(model)){ if(model!==cfg.model){ cfg.model=model; saveCfg(); } }
+    else if(cfg.smartModel!==model){ cfg.smartModel=model; saveCfg(); }
+    lastModel=model;
+    if(newlyOut.length){
+      const smartGone = smart && cfg.smart!==false && !kindStatus("smart").ok;
+      toast(smartGone ? "🧠 賢いAIは今日の無料枠を使い切りました。⚡軽いAIで答えます" : "ひとつのAIが使い切りになったので、別のAIで答えました", 3600);
+    }
+    renderAIStatus();
+    return text;
+  }
+  renderAIStatus();
+  if(lastErr && lastErr.status===429){
+    const ls=kindStatus("lite"), ss=kindStatus("smart");
+    if(!ls.ok && (!ss.ok || ss.none))
+      throw Object.assign(lastErr,{allOut:true,reset:Math.min(ls.reset||Infinity,ss.reset||Infinity)});
   }
   throw lastErr||new Error("no model");
 }
@@ -502,59 +586,85 @@ const QA_SCHEMA = {type:"OBJECT",properties:{
   ideas:{type:"ARRAY",items:{type:"STRING"}}
 },required:["answer","ideas"]};
 
+let qHist = [];   // この質問画面での会話（クリアで消える）
 $("#askBtn").onclick = ()=>{
   if(!cfg.apiKey){ toast("先に⚙️設定でAPIキーを入れてください"); return; }
   const node=M.nodes[M.cur];
+  if(qHist.nodeId!==node.id){ qHist=[]; qHist.nodeId=node.id; }
   $("#sheetBox").innerHTML = `
     <h3>💬 AIに質問</h3>
-    <p class="hint">いまの中央「${esc(node.text)}」について聞けます。<br>例：「お金をかけずに作るには？」「もっと意外な方向は？」「ターゲットを高齢者にしたら？」</p>
-    <textarea id="qText" placeholder="質問を書く"></textarea>
-    <div class="row"><button class="btn" id="qGo">質問する</button><button class="btn sub" id="qClose">閉じる</button></div>
-    <div id="qOut"></div>`;
+    <p class="hint">いまの中央「${esc(node.text)}」について聞けます。続けて質問すると、前の答えをふまえて答えます。<br>例：「お金をかけずに作るには？」「もっと意外な方向は？」「一番売れそうなのは？」</p>
+    <div class="aistat" style="justify-content:flex-start;margin-top:0"></div>
+    <div id="qOut"></div>
+    <textarea id="qText" placeholder="質問を書く" style="margin-top:10px"></textarea>
+    <div class="row"><button class="btn" id="qGo">質問する</button><button class="btn sub" id="qClear" style="flex:0 0 96px">🧹 クリア</button><button class="btn sub" id="qClose" style="flex:0 0 80px">閉じる</button></div>`;
   $("#sheet").classList.add("on");
+  renderQA(node.id); renderAIStatus();
   setTimeout(()=>$("#qText").focus(),50);
   $("#qClose").onclick=closeSheet;
+  $("#qClear").onclick=()=>{ qHist=[]; qHist.nodeId=node.id; $("#qText").value=""; renderQA(node.id); $("#qText").focus(); toast("質問と答えを消しました"); };
   $("#qGo").onclick=()=>ask(node.id);
 };
+
+function renderQA(nodeId){
+  const m=M, cellsNow=()=>m.nodes[nodeId].cells.filter(Boolean).map(c=>m.nodes[c].text);
+  $("#qOut").innerHTML = qHist.map((h,hi)=>`
+    <div style="margin-top:12px;font-weight:700;font-size:14px">🙋 ${esc(h.q)}</div>
+    <div class="qa" style="margin-top:6px">${esc(h.a)}${h.lite?`<div style="margin-top:8px;font-size:12px;color:#B03A36">⚡ 賢いAIを使い切ったため、軽いAIで答えています</div>`:""}</div>
+    ${h.ideas.length?`<p class="hint" style="margin:10px 0 0">押すと曼荼羅のマスに入ります</p>
+    <div class="ideas">${h.ideas.map((t,i)=>`<button data-h="${hi}" data-i="${i}" class="${cellsNow().includes(t)?"used":""}">＋ ${esc(t)}</button>`).join("")}</div>`:""}`).join("");
+  $("#qOut").querySelectorAll("[data-h]").forEach(b=>b.onclick=()=>{
+    if(b.classList.contains("used")) return;
+    const t=qHist[+b.dataset.h].ideas[+b.dataset.i];
+    const node=m.nodes[nodeId], i=node.cells.indexOf(null);
+    if(i>=0){
+      node.cells[i]=newNode(m,t,nodeId); m.updated=new Date().toISOString(); save();
+      b.classList.add("used"); toast("マスに入れました"); renderMandala();
+    }else{
+      pendingIdea={text:t,nodeId};
+      closeSheet(); renderMandala();
+      toast(`8マスが埋まっています。入れ替えるマスを押してください（下の階層がないマスだけ）`,3800);
+    }
+  });
+}
 
 async function ask(nodeId){
   const q=$("#qText").value.trim();
   if(!q){ toast("質問を書いてください"); return; }
   const m=M, path=pathOf(m,nodeId).map(n=>n.text);
   const cells=m.nodes[nodeId].cells.filter(Boolean).map(c=>m.nodes[c].text);
+  const tree=treeText(m).slice(0,150).join("\n");
+  const hist=qHist.slice(-4).map(h=>`Q: ${h.q}\nA: ${h.a}`).join("\n\n");
   const prompt =
-`You are a brainstorming partner inside a Mandala Chart (Mandalart) idea app.
-Theme path from the root to the current center cell: ${path.join(" > ")}
-Current center cell: "${path[path.length-1]}"
+`You are an experienced product planner and creative consultant, acting as a brainstorming partner inside a Mandala Chart (Mandalart) idea app.
+The user is an independent creator/developer in Japan who builds small apps and videos alone, prefers free tools, and wants practical ideas they can actually act on.
+
+The whole chart so far (indentation = expansion):
+${tree}
+
+Current focus (center cell): "${path[path.length-1]}"
+Path to it: ${path.join(" > ")}
 Its surrounding cells right now: ${cells.length?cells.join(" / "):"(empty)"}
+${hist?`\nEarlier in this conversation:\n${hist}\n`:""}
+The user's new question (in Japanese): ${q}
 
-The user asks (in Japanese): ${q}
-
-Respond in natural, plain Japanese that is easy to understand.
-- "answer": a direct, helpful answer to the question in 2-6 short sentences. No markdown.
-- "ideas": 3 to 8 NEW ideas inspired by the question that could go into the surrounding cells. Each must be a noun phrase of at most 14 Japanese characters, must not duplicate the existing cells, no numbering, no emoji.
+How to answer:
+- Answer THIS question directly and specifically for this theme. Start with a one-sentence conclusion.
+- Then give 3-5 concrete points: real examples, specific methods, names of free tools or services when relevant, numbers when helpful, and why each matters. Avoid vague generic advice (e.g. "ユーザーのニーズを考える", "差別化が大切") unless you say exactly how.
+- If the question is unclear, interpret it in the most useful way for the current focus and say which interpretation you used.
+- Write in plain, easy Japanese. Use "・" bullets on separate lines for the points. No markdown symbols like ** or #.
+- "ideas": 4 to 8 NEW, concrete ideas that follow from your answer and could go into the surrounding cells. Each is a noun phrase of at most 14 Japanese characters, not duplicating existing cells, no numbering, no emoji.
 Return JSON with keys "answer" and "ideas".`;
   $("#qGo").disabled=true; $("#qGo").textContent="考えています…";
   try{
-    const raw=await callGemini(prompt, QA_SCHEMA, 0.9);
+    const raw=await callGemini(prompt, QA_SCHEMA, 0.8, true);
     let d; try{ d=JSON.parse(raw); }catch(e){ const mm=raw.match(/\{[\s\S]*\}/); d=mm?JSON.parse(mm[0]):null; }
     if(!d || !d.answer) throw Object.assign(new Error("parse"),{status:-1});
     const ideas=(d.ideas||[]).map(s=>String(s).trim()).filter(s=>s && !cells.includes(s)).slice(0,8);
-    $("#qOut").innerHTML = `<div class="qa">${esc(d.answer)}</div>
-      ${ideas.length?`<p class="hint" style="margin-top:12px">押すと曼荼羅のマスに入ります</p>
-      <div class="ideas">${ideas.map(t=>`<button data-t="${esc(t)}">＋ ${esc(t)}</button>`).join("")}</div>`:""}`;
-    $("#qOut").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{
-      if(b.classList.contains("used")) return;
-      const node=m.nodes[nodeId], i=node.cells.indexOf(null);
-      if(i>=0){
-        node.cells[i]=newNode(m,b.dataset.t,nodeId); m.updated=new Date().toISOString(); save();
-        b.classList.add("used"); toast("マスに入れました"); renderMandala();
-      }else{
-        pendingIdea={text:b.dataset.t,nodeId};
-        closeSheet(); renderMandala();
-        toast(`8マスが埋まっています。入れ替えるマスを押してください（下の階層がないマスだけ）`,3800);
-      }
-    });
+    qHist.push({q,a:String(d.answer).replace(/\*\*/g,""),ideas,lite:isLite(lastModel) && cfg.smart!==false});
+    $("#qText").value="";
+    renderQA(nodeId);
+    const last=$("#qOut").lastElementChild; if(last) last.scrollIntoView({block:"nearest"});
   }catch(e){
     toast(e.status===-1?"AIの答えを読み取れませんでした。もう一度押してください":friendly(e),4200);
   }finally{
@@ -625,10 +735,10 @@ async function makeConclusion(kind){
   const m=M;
   busy=true; renderMandala(); $("#status").textContent=`${KIND[kind]}をまとめています…（少し時間がかかります）`;
   try{
-    const raw=await callGemini(conclusionPrompt(kind), SCHEMAS[kind], 0.7);
+    const raw=await callGemini(conclusionPrompt(kind), SCHEMAS[kind], 0.7, true);
     let d; try{ d=JSON.parse(raw); }catch(e){ const mm=raw.match(/\{[\s\S]*\}/); d=mm?JSON.parse(mm[0]):null; }
     if(!d || !d.conclusion) throw Object.assign(new Error("parse"),{status:-1});
-    m.results=m.results||{}; m.results[kind]={data:d,created:new Date().toISOString(),cells:Object.keys(m.nodes).length-1};
+    m.results=m.results||{}; m.results[kind]={data:d,created:new Date().toISOString(),cells:Object.keys(m.nodes).length-1,lite:isLite(lastModel)&&cfg.smart!==false};
     m.updated=new Date().toISOString(); save();
     busy=false; openResult(kind);
   }catch(e){
@@ -662,6 +772,7 @@ function openResult(kind){
   const d=r.data, theme=M.nodes[M.rootId].text;
   let html=`<div class="res"><h2>${KIND[kind]}</h2>
     <div class="meta">テーマ：${esc(theme)}・${fmtDate(r.created)}・${r.cells}マスから作成</div>
+    ${r.lite?`<p style="font-size:12px;color:#B03A36;margin:-6px 0 10px">⚡ 賢いAIを使い切っていたため、軽いAIで作りました。復活後に作り直すと良くなることがあります</p>`:""}
     <div class="big">${esc(d.conclusion)}</div>`;
   if(kind==="exec"){
     html+=`<h3>選んだ理由</h3>${para(d.reason)}
@@ -708,7 +819,9 @@ function renderSettings(){
   $("#modelSel").innerHTML = opts.length ? opts.map(n=>`<option ${n===cfg.model?"selected":""}>${esc(n)}</option>`).join("")
     : `<option value="">（キーを保存すると自動で選びます）</option>`;
   $("#modelHint").textContent = cfg.model ? "ふだんはこのままでOK。AIが止まったときに別のモデルを選ぶと動くことがあります。" : "";
-  $("#curVer").textContent=VERSION;
+  $("#curVer").textContent=VERSION; renderAIStatus();
+  $("#smartChk").checked=cfg.smart!==false;
+  $("#smartName").textContent=cfg.smartModel||strongList()[0]||"（キー保存後に決まります）";
   $("#todayCount").textContent=(cfg.usage?.[today()]||0)+"回";
   $("#legacyBox").hidden = !(lsGet("ideaNote.v1",{ideas:[]}).ideas||[]).length;
 }
@@ -726,6 +839,7 @@ $("#keySave").onclick=async()=>{
     toast(friendly(e),4200);
   }finally{ $("#keySave").disabled=false; $("#keySave").textContent="保存して接続を確かめる"; renderSettings(); }
 };
+$("#smartChk").onchange=()=>{ cfg.smart=$("#smartChk").checked; saveCfg(); toast(cfg.smart?"質問と結論は賢いAIを使います":"すべて軽いAIを使います"); };
 $("#modelSel").onchange=()=>{ cfg.model=$("#modelSel").value; saveCfg(); toast("モデルを変えました："+cfg.model); };
 
 $("#exportBtn").onclick=async()=>{
@@ -776,7 +890,7 @@ async function checkUpdate(manual){
 }
 $("#updCheck").onclick=()=>checkUpdate(true);
 $("#updGo").onclick=doUpdate;
-document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkUpdate(false); });
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden){ checkUpdate(false); renderAIStatus(); } });
 if(location.protocol.startsWith("http")) checkUpdate(false);
 if(location.search.includes("v=")) history.replaceState(null,"",location.pathname);
 
