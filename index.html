@@ -88,6 +88,27 @@ nav button.on{color:#3B2C00;font-weight:700}
 #toast.on{opacity:.95}
 .kv{display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-bottom:1px dashed #EEE}
 .kv span:last-child{font-weight:700}
+.concl{margin-top:16px;padding:12px;border-radius:14px;background:#fff;border:1px solid var(--line)}
+.concl h4{margin:0;font-size:14px;color:#8A6A00}
+.res h2{font-size:20px;margin:0 0 4px}
+.res .meta{color:var(--sub);font-size:12px;margin-bottom:12px}
+.res .big{background:var(--yellow);color:#3B2C00;border-radius:14px;padding:16px;font-size:18px;font-weight:800;line-height:1.5;margin-bottom:14px}
+.res h3{font-size:15px;margin:18px 0 8px;padding-left:8px;border-left:4px solid var(--yellow)}
+.res p{margin:0 0 8px;line-height:1.65;font-size:15px}
+.res ul{margin:0;padding-left:20px;line-height:1.7;font-size:15px}
+.tw{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:#fff}
+.res table{border-collapse:collapse;width:100%;font-size:14px}
+.res th{background:var(--yellow-soft);color:#5A4300;text-align:left;padding:8px;white-space:nowrap;font-size:13px}
+.res td{padding:8px;border-top:1px solid var(--line);vertical-align:top;line-height:1.5}
+.res td:first-child{font-weight:700}
+.res td.nw{white-space:nowrap}
+.res .num{color:#B08A00;font-weight:800;width:1.8em}
+.res .note{font-size:12px;color:var(--sub);margin-top:16px;line-height:1.5}
+.qa{background:var(--yellow-soft);border-radius:12px;padding:12px;margin-top:12px;line-height:1.65;font-size:15px;white-space:pre-wrap}
+.ideas{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.ideas button{border:1px solid #E6C65A;background:#fff;border-radius:18px;padding:8px 12px;font:inherit;font-size:14px;color:var(--ink)}
+.ideas button.used{opacity:.4}
+.badge{font-size:12px;margin-left:4px}
 </style>
 </head>
 <body>
@@ -120,8 +141,23 @@ nav button.on{color:#3B2C00;font-weight:700}
         <button class="btn sub" id="upBtn">⬆ 一つ上へ</button>
         <button class="btn sub" id="topBtn">🏠 最初へ</button>
       </div>
+      <div class="row"><button class="btn sub" id="askBtn">💬 AIに質問</button></div>
+      <div class="concl">
+        <h4>🏁 結論を出す（曼荼羅全体から）</h4>
+        <div class="row" style="margin-top:6px">
+          <button class="btn" id="execBtn">📄 実行計画</button>
+          <button class="btn" id="bizBtn">💼 事業計画</button>
+        </div>
+        <div class="row" id="savedRow"></div>
+      </div>
     </div>
   </div>
+</section>
+
+<!-- 結論 -->
+<section class="page" id="p-result">
+  <div class="row" style="margin:0 0 12px"><button class="btn sub" id="resBack">← 曼荼羅へ戻る</button></div>
+  <div id="resBody"></div>
 </section>
 
 <!-- 設定 -->
@@ -167,7 +203,7 @@ nav button.on{color:#3B2C00;font-weight:700}
 <div id="toast"></div>
 
 <script>
-const VERSION = "v2.0";
+const VERSION = "v3.0";
 const KEY = "ideaNote.v2";
 const API = "https://generativelanguage.googleapis.com/v1beta";
 const FALLBACK_MODELS = ["gemini-3.5-flash-lite","gemini-3.1-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
@@ -226,7 +262,7 @@ function renderList(){
     const mini=POS.map(p=>p===null?'<i class="c"></i>':`<i class="${root.cells[p]?"f":""}"></i>`).join("");
     return `<div class="mitem" data-id="${m.id}">
       <div class="mini">${mini}</div>
-      <div class="t"><b>${esc(root.text)}</b><small>${fmtDate(m.updated)}・${total}マス・${depth}階層</small></div>
+      <div class="t"><b>${esc(root.text)}</b><small>${fmtDate(m.updated)}・${total}マス・${depth}階層${m.results?.exec?'<span class="badge">📄</span>':""}${m.results?.biz?'<span class="badge">💼</span>':""}</small></div>
       <button class="del" data-del="${m.id}">🗑</button></div>`;
   }).join("");
   $("#mlist").querySelectorAll(".mitem").forEach(el=>el.onclick=e=>{
@@ -269,17 +305,25 @@ function renderMandala(anim){
   g.querySelectorAll(".cell").forEach(el=>el.onclick=()=>onCell(el));
   $("#editBtn").classList.toggle("on",editMode);
   $("#editBtn").textContent = editMode ? "✏️ 書き込み中（押して終了）" : "✏️ 書き込み";
-  $("#aiBtn").disabled=busy; $("#upBtn").disabled=!node.parent; $("#topBtn").disabled=!node.parent;
+  $("#aiBtn").disabled=busy; $("#askBtn").disabled=busy; $("#execBtn").disabled=busy; $("#bizBtn").disabled=busy; renderSaved(); $("#upBtn").disabled=!node.parent; $("#topBtn").disabled=!node.parent;
   const used=filledCount(node);
   $("#status").textContent = busy ? "AIが考えています…" :
+    pendingIdea ? `「${pendingIdea.text}」と入れ替えるマスを押してください（中央を押すとやめる）` :
     editMode ? "マスを押すと書き換え・消去ができます" :
     !cfg.apiKey && used<8 ? "⚙️設定でAPIキーを入れるとAIが8マスを出します。「＋」を押すと自分で書けます" :
     used ? "マスを押すとその先へ深掘りします" : "「✨ AIで出す」か「＋」で8マスを埋めてください";
 }
-function go(id){ if(busy) return; M.cur=id; touch(); renderMandala(true); }
+function go(id){ if(busy) return; pendingIdea=null; M.cur=id; touch(); renderMandala(true); }
 function onCell(el){
   if(busy) return;
   const node=M.nodes[M.cur];
+  if(pendingIdea){
+    if(pendingIdea.nodeId!==M.cur || el.dataset.c==="center"){ pendingIdea=null; renderMandala(); toast("入れ替えをやめました"); return; }
+    const pp=+el.dataset.p, oc=node.cells[pp];
+    if(oc && filledCount(M.nodes[oc])>0){ toast("このマスには下の階層があるので入れ替えできません"); return; }
+    if(oc) delete M.nodes[oc];
+    node.cells[pp]=newNode(M,pendingIdea.text,M.cur); pendingIdea=null; touch(); renderMandala(); toast("入れ替えました"); return;
+  }
   if(el.dataset.c==="center"){ if(editMode) openEdit(M.cur,null); return; }
   const p=+el.dataset.p, cid=node.cells[p];
   if(!cid || editMode){ openEdit(cid,p); return; }
@@ -361,7 +405,7 @@ function friendly(e){
   if(!e.status) return "通信できませんでした。電波を確認してください";
   return "AIでエラーが出ました（"+e.status+"）";
 }
-async function callGemini(prompt){
+async function callGemini(prompt, schema={type:"ARRAY",items:{type:"STRING"}}, temperature=1){
   let lastErr;
   for(const model of modelCandidates().slice(0,4)){
     try{
@@ -371,8 +415,7 @@ async function callGemini(prompt){
         headers:{"Content-Type":"application/json","x-goog-api-key":cfg.apiKey},
         body:JSON.stringify({
           contents:[{role:"user",parts:[{text:prompt}]}],
-          generationConfig:{temperature:1,responseMimeType:"application/json",
-            responseSchema:{type:"ARRAY",items:{type:"STRING"}}}
+          generationConfig:{temperature,responseMimeType:"application/json",responseSchema:schema}
         })
       });
       if(!r.ok){
@@ -434,6 +477,221 @@ Return ONLY a JSON array of exactly ${empty.length} strings.`;
   }
 }
 
+/* ---------- 曼荼羅全体を文章にする ---------- */
+function treeText(m, id=m.rootId, depth=0, out=[]){
+  if(out.length>400) return out;
+  const n=m.nodes[id];
+  out.push("  ".repeat(depth)+"- "+n.text);
+  n.cells.forEach(c=>{ if(c) treeText(m,c,depth+1,out); });
+  return out;
+}
+
+/* ---------- AIに質問 ---------- */
+let pendingIdea = null;   // マスに入れ替える案（満杯のとき）
+const QA_SCHEMA = {type:"OBJECT",properties:{
+  answer:{type:"STRING"},
+  ideas:{type:"ARRAY",items:{type:"STRING"}}
+},required:["answer","ideas"]};
+
+$("#askBtn").onclick = ()=>{
+  if(!cfg.apiKey){ toast("先に⚙️設定でAPIキーを入れてください"); return; }
+  const node=M.nodes[M.cur];
+  $("#sheetBox").innerHTML = `
+    <h3>💬 AIに質問</h3>
+    <p class="hint">いまの中央「${esc(node.text)}」について聞けます。<br>例：「お金をかけずに作るには？」「もっと意外な方向は？」「ターゲットを高齢者にしたら？」</p>
+    <textarea id="qText" placeholder="質問を書く"></textarea>
+    <div class="row"><button class="btn" id="qGo">質問する</button><button class="btn sub" id="qClose">閉じる</button></div>
+    <div id="qOut"></div>`;
+  $("#sheet").classList.add("on");
+  setTimeout(()=>$("#qText").focus(),50);
+  $("#qClose").onclick=closeSheet;
+  $("#qGo").onclick=()=>ask(node.id);
+};
+
+async function ask(nodeId){
+  const q=$("#qText").value.trim();
+  if(!q){ toast("質問を書いてください"); return; }
+  const m=M, path=pathOf(m,nodeId).map(n=>n.text);
+  const cells=m.nodes[nodeId].cells.filter(Boolean).map(c=>m.nodes[c].text);
+  const prompt =
+`You are a brainstorming partner inside a Mandala Chart (Mandalart) idea app.
+Theme path from the root to the current center cell: ${path.join(" > ")}
+Current center cell: "${path[path.length-1]}"
+Its surrounding cells right now: ${cells.length?cells.join(" / "):"(empty)"}
+
+The user asks (in Japanese): ${q}
+
+Respond in natural, plain Japanese that is easy to understand.
+- "answer": a direct, helpful answer to the question in 2-6 short sentences. No markdown.
+- "ideas": 3 to 8 NEW ideas inspired by the question that could go into the surrounding cells. Each must be a noun phrase of at most 14 Japanese characters, must not duplicate the existing cells, no numbering, no emoji.
+Return JSON with keys "answer" and "ideas".`;
+  $("#qGo").disabled=true; $("#qGo").textContent="考えています…";
+  try{
+    const raw=await callGemini(prompt, QA_SCHEMA, 0.9);
+    let d; try{ d=JSON.parse(raw); }catch(e){ const mm=raw.match(/\{[\s\S]*\}/); d=mm?JSON.parse(mm[0]):null; }
+    if(!d || !d.answer) throw Object.assign(new Error("parse"),{status:-1});
+    const ideas=(d.ideas||[]).map(s=>String(s).trim()).filter(s=>s && !cells.includes(s)).slice(0,8);
+    $("#qOut").innerHTML = `<div class="qa">${esc(d.answer)}</div>
+      ${ideas.length?`<p class="hint" style="margin-top:12px">押すと曼荼羅のマスに入ります</p>
+      <div class="ideas">${ideas.map(t=>`<button data-t="${esc(t)}">＋ ${esc(t)}</button>`).join("")}</div>`:""}`;
+    $("#qOut").querySelectorAll("[data-t]").forEach(b=>b.onclick=()=>{
+      if(b.classList.contains("used")) return;
+      const node=m.nodes[nodeId], i=node.cells.indexOf(null);
+      if(i>=0){
+        node.cells[i]=newNode(m,b.dataset.t,nodeId); m.updated=new Date().toISOString(); save();
+        b.classList.add("used"); toast("マスに入れました"); renderMandala();
+      }else{
+        pendingIdea={text:b.dataset.t,nodeId};
+        closeSheet(); renderMandala();
+        toast(`8マスが埋まっています。入れ替えるマスを押してください（下の階層がないマスだけ）`,3800);
+      }
+    });
+  }catch(e){
+    toast(e.status===-1?"AIの答えを読み取れませんでした。もう一度押してください":friendly(e),4200);
+  }finally{
+    const g=$("#qGo"); if(g){ g.disabled=false; g.textContent="質問する"; }
+  }
+}
+
+/* ---------- 結論（実行計画・事業計画） ---------- */
+const ROWS = (props)=>({type:"ARRAY",items:{type:"OBJECT",properties:Object.fromEntries(props.map(p=>[p,{type:"STRING"}])),required:props}});
+const STRS = {type:"ARRAY",items:{type:"STRING"}};
+const SCHEMAS = {
+  exec:{type:"OBJECT",properties:{
+    conclusion:{type:"STRING"}, reason:{type:"STRING"},
+    adopted:ROWS(["idea","why"]),
+    steps:ROWS(["step","period","done"]),
+    today:STRS, week:STRS,
+    risks:ROWS(["risk","measure"])
+  },required:["conclusion","reason","adopted","steps","today","week","risks"]},
+  biz:{type:"OBJECT",properties:{
+    conclusion:{type:"STRING"}, target:{type:"STRING"}, problem:{type:"STRING"}, offer:{type:"STRING"},
+    revenue:{type:"STRING"}, difference:{type:"STRING"},
+    costs:ROWS(["item","amount","note"]),
+    kpis:ROWS(["metric","target"]),
+    roadmap:ROWS(["period","goal"]),
+    risks:ROWS(["risk","measure"])
+  },required:["conclusion","target","problem","offer","revenue","difference","costs","kpis","roadmap","risks"]}
+};
+const KIND = {exec:"📄 実行計画", biz:"💼 事業計画"};
+
+function conclusionPrompt(kind){
+  const tree=treeText(M).join("\n");
+  const common =
+`You are a sharp planning consultant. Below is a Mandala Chart (Mandalart) brainstorm. The first line is the theme; indentation shows how each idea was expanded into sub-ideas.
+
+${tree}
+
+Read the WHOLE chart, pick the strongest and most promising ideas (deeper, more concrete branches are usually more developed thinking), and combine them into one clear conclusion.
+The user is an independent creator/developer in Japan who prefers free tools and small, practical, staged steps.
+Write everything in plain, easy-to-understand Japanese. No markdown symbols. Keep each table cell short (one or two short sentences).
+`;
+  if(kind==="exec") return common+
+`Produce an ACTION PLAN as JSON:
+- conclusion: the conclusion in one sentence (what to make/do).
+- reason: why this is the best choice, 2-3 sentences.
+- adopted: 3-6 ideas taken from the chart, each with "idea" (use the chart's wording) and "why" (why it was adopted).
+- steps: 4-8 ordered steps, each with "step" (what to do), "period" (rough duration, e.g. 1週間), "done" (how to know it is finished).
+- today: 1-3 things to do today. week: 2-4 things to do this week.
+- risks: 2-4 risks, each with "risk" and "measure" (countermeasure).`;
+  return common+
+`Produce a BUSINESS PLAN as JSON:
+- conclusion: the business in one sentence.
+- target: who the customers are. problem: what problem/pain they have. offer: what is provided and its value.
+- revenue: how it makes money (pricing ideas included).
+- difference: how it differs from existing alternatives.
+- costs: 3-6 cost items, each with "item", "amount" (rough estimate in yen, e.g. 月0円 / 約3万円), "note".
+- kpis: 3-5 target metrics, each with "metric" and "target" (number with period).
+- roadmap: 3-5 phases, each with "period" (e.g. 1か月目, 3か月後) and "goal".
+- risks: 2-4 risks, each with "risk" and "measure".
+Amounts and numbers are rough estimates; keep them realistic and modest.`;
+}
+
+async function makeConclusion(kind){
+  if(busy) return;
+  if(!cfg.apiKey){ toast("先に⚙️設定でAPIキーを入れてください"); return; }
+  if(Object.keys(M.nodes).length<3){ toast("もう少しマスを増やしてから結論を出してください"); return; }
+  const old=M.results?.[kind];
+  if(old && !confirm(`保存済みの${KIND[kind]}を新しく作り直しますか？`)) return;
+  const m=M;
+  busy=true; renderMandala(); $("#status").textContent=`${KIND[kind]}をまとめています…（少し時間がかかります）`;
+  try{
+    const raw=await callGemini(conclusionPrompt(kind), SCHEMAS[kind], 0.7);
+    let d; try{ d=JSON.parse(raw); }catch(e){ const mm=raw.match(/\{[\s\S]*\}/); d=mm?JSON.parse(mm[0]):null; }
+    if(!d || !d.conclusion) throw Object.assign(new Error("parse"),{status:-1});
+    m.results=m.results||{}; m.results[kind]={data:d,created:new Date().toISOString(),cells:Object.keys(m.nodes).length-1};
+    m.updated=new Date().toISOString(); save();
+    busy=false; openResult(kind);
+  }catch(e){
+    toast(e.status===-1?"AIの答えを読み取れませんでした。もう一度押してください":friendly(e),4200);
+  }finally{
+    busy=false; if(document.querySelector("#p-mandala.on")) renderMandala();
+  }
+}
+$("#execBtn").onclick=()=>makeConclusion("exec");
+$("#bizBtn").onclick=()=>makeConclusion("biz");
+
+function renderSaved(){
+  const r=M?.results||{};
+  const ks=Object.keys(KIND).filter(k=>r[k]);
+  $("#savedRow").innerHTML = ks.map(k=>`<button class="btn sub" data-open="${k}">保存済みの${KIND[k]}を見る</button>`).join("");
+  $("#savedRow").style.display = ks.length?"":"none";
+  $("#savedRow").style.flexDirection="column";
+  $("#savedRow").querySelectorAll("[data-open]").forEach(b=>b.onclick=()=>openResult(b.dataset.open));
+}
+
+function table(head, rows, keys, numbered){
+  if(!rows||!rows.length) return "";
+  return `<div class="tw"><table><thead><tr>${numbered?"<th></th>":""}${head.map(h=>`<th>${h}</th>`).join("")}</tr></thead><tbody>
+    ${rows.map((r,i)=>`<tr>${numbered?`<td class="num">${i+1}</td>`:""}${keys.map(k=>`<td class="${["period","amount"].includes(k)?"nw":""}">${esc(r[k])}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+}
+const list = a => a&&a.length?`<ul>${a.map(x=>`<li>${esc(x)}</li>`).join("")}</ul>`:"";
+const para = t => t?`<p>${esc(t)}</p>`:"";
+
+function openResult(kind){
+  const r=M.results?.[kind]; if(!r) return;
+  const d=r.data, theme=M.nodes[M.rootId].text;
+  let html=`<div class="res"><h2>${KIND[kind]}</h2>
+    <div class="meta">テーマ：${esc(theme)}・${fmtDate(r.created)}・${r.cells}マスから作成</div>
+    <div class="big">${esc(d.conclusion)}</div>`;
+  if(kind==="exec"){
+    html+=`<h3>選んだ理由</h3>${para(d.reason)}
+      <h3>採用したマス</h3>${table(["アイデア","理由"],d.adopted,["idea","why"])}
+      <h3>手順</h3>${table(["やること","期間","できた目安"],d.steps,["step","period","done"],true)}
+      <h3>今日やること</h3>${list(d.today)}
+      <h3>今週やること</h3>${list(d.week)}
+      <h3>リスクと対策</h3>${table(["リスク","対策"],d.risks,["risk","measure"])}`;
+  }else{
+    html+=`<h3>誰に</h3>${para(d.target)}
+      <h3>どんな困りごと</h3>${para(d.problem)}
+      <h3>何を提供するか</h3>${para(d.offer)}
+      <h3>稼ぎ方</h3>${para(d.revenue)}
+      <h3>他との違い</h3>${para(d.difference)}
+      <h3>費用（見込み）</h3>${table(["項目","金額","メモ"],d.costs,["item","amount","note"])}
+      <h3>目標の数字</h3>${table(["指標","目標"],d.kpis,["metric","target"])}
+      <h3>時期ごとの目標</h3>${table(["時期","目標"],d.roadmap,["period","goal"])}
+      <h3>リスクと対策</h3>${table(["リスク","対策"],d.risks,["risk","measure"])}`;
+  }
+  html+=`<p class="note">※ 金額や数字はAIの見込みです。実際に使う前に確かめてください。</p>
+    <div class="row"><button class="btn sub" id="resCopy">📋 文章でコピー</button></div></div>`;
+  $("#resBody").innerHTML=html;
+  $("#resCopy").onclick=()=>copyResult(kind);
+  document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x.dataset.p==="mandala"));
+  document.querySelectorAll(".page").forEach(x=>x.classList.toggle("on",x.id==="p-result"));
+  window.scrollTo(0,0);
+}
+$("#resBack").onclick=()=>show("mandala");
+
+async function copyResult(kind){
+  const d=M.results[kind].data, L=[`【${KIND[kind].slice(2)}】${M.nodes[M.rootId].text}`,"",`結論：${d.conclusion}`];
+  const rows=(t,a,keys)=>{ if(a&&a.length){ L.push("",`■ ${t}`); a.forEach((r,i)=>L.push(`${i+1}. `+keys.map(k=>r[k]).join(" ／ "))); } };
+  const items=(t,a)=>{ if(a&&a.length){ L.push("",`■ ${t}`); a.forEach(x=>L.push("・"+x)); } };
+  const text=(t,v)=>{ if(v) L.push("",`■ ${t}`,v); };
+  if(kind==="exec"){ text("選んだ理由",d.reason); rows("採用したマス",d.adopted,["idea","why"]); rows("手順（やること／期間／できた目安）",d.steps,["step","period","done"]); items("今日やること",d.today); items("今週やること",d.week); rows("リスクと対策",d.risks,["risk","measure"]); }
+  else{ text("誰に",d.target); text("どんな困りごと",d.problem); text("何を提供するか",d.offer); text("稼ぎ方",d.revenue); text("他との違い",d.difference); rows("費用（項目／金額／メモ）",d.costs,["item","amount","note"]); rows("目標の数字",d.kpis,["metric","target"]); rows("時期ごとの目標",d.roadmap,["period","goal"]); rows("リスクと対策",d.risks,["risk","measure"]); }
+  try{ await navigator.clipboard.writeText(L.join("\n")); toast("📋 コピーしました"); }catch(e){ toast("コピーできませんでした"); }
+}
+
 /* ---------- 設定 ---------- */
 function renderSettings(){
   $("#apiKey").value=cfg.apiKey||"";
@@ -490,7 +748,8 @@ $("#legacyCopy").onclick=async()=>{
 
 /* ---------- 開始 ---------- */
 $("#ver").textContent=VERSION;
-$("#about").textContent=`Idea Note by Urushihara ${VERSION}\nAI曼荼羅・無限発想エンジン\nテーマ → 8マス → タップでさらに8マス…と何階層でも深掘りできます。`;
+$("#about").textContent=`Idea Note by Urushihara ${VERSION}\nAI曼荼羅・無限発想エンジン\nテーマ → 8マス → タップでさらに8マス…と何階層でも深掘りできます。
+途中でAIに質問し、最後に実行計画・事業計画にまとめられます。`;
 renderList();
 </script>
 </body>
