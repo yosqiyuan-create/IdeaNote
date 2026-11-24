@@ -114,6 +114,7 @@ nav button.on{color:#3B2C00;font-weight:700}
 <body>
 <header><h1>Idea Note <span class="by">by Urushihara</span> <span class="ver" id="ver"></span></h1></header>
 
+<div id="updBar" hidden style="background:#3B2C00;color:#FFE27A;padding:10px 14px;font-size:14px;display:none;gap:10px;align-items:center"><span style="flex:1" id="updText"></span><button class="btn" id="updGo" style="padding:7px 12px;font-size:14px">更新する</button></div>
 <main>
 <!-- 一覧 -->
 <section class="page on" id="p-list">
@@ -172,6 +173,12 @@ nav button.on{color:#3B2C00;font-weight:700}
     <p class="hint" id="modelHint" style="margin-top:6px"></p>
   </div>
   <div class="card">
+    <h2>🔄 アプリの更新</h2>
+    <p class="hint">新しい版をアップしたら、ここを押すだけで切り替わります。<b>ホーム画面のアイコンは消さないでください</b>（消すとAPIキーと曼荼羅も消えます）。</p>
+    <div class="kv"><span>今の版</span><span id="curVer"></span></div>
+    <div class="row"><button class="btn" id="updCheck">🔄 最新版を確認して更新</button></div>
+  </div>
+  <div class="card">
     <h2>📊 今日のAI使用</h2>
     <div class="kv"><span>今日AIを使った回数</span><span id="todayCount">0回</span></div>
     <p class="hint" style="margin-top:8px">無料枠の上限はGoogleの都合で変わります。AIが止まったら、明日まで待つか、マスに自分で書き込んで続けてください。</p>
@@ -179,6 +186,8 @@ nav button.on{color:#3B2C00;font-weight:700}
   <div class="card">
     <h2>💾 バックアップ</h2>
     <p class="hint">曼荼羅はこのiPhoneの中にだけ保存されます。Safariは長く使わないとデータを消すことがあるので、ときどき書き出してください。</p>
+    <label style="display:flex;gap:8px;align-items:center;color:var(--ink);font-size:14px;margin:4px 0 0"><input type="checkbox" id="expKey" checked style="width:20px;height:20px"> APIキーも一緒に書き出す</label>
+    <p class="hint" style="margin:4px 0 0">キー入りのファイルは人に渡さないでください。読み込むとキーも戻ります。</p>
     <div class="row"><button class="btn" id="exportBtn">📤 書き出す（ファイル）</button></div>
     <div class="row"><button class="btn sub" id="importBtn">📥 読み込む（ファイル）</button></div>
     <input type="file" id="importFile" accept=".json,application/json" hidden>
@@ -203,8 +212,8 @@ nav button.on{color:#3B2C00;font-weight:700}
 <div id="toast"></div>
 
 <script>
-const VERSION = "v3.0";
-const KEY = "ideaNote.v2";
+const VERSION = "v3.1";
+const KEY = "ideaNote.v2";   // 保存場所の名前。バージョンが変わっても変えない
 const API = "https://generativelanguage.googleapis.com/v1beta";
 const FALLBACK_MODELS = ["gemini-3.5-flash-lite","gemini-3.1-flash-lite","gemini-2.5-flash-lite","gemini-2.5-flash"];
 const POS = [0,1,2,3,null,4,5,6,7];   // 3×3 の並び（null が中央）
@@ -699,6 +708,7 @@ function renderSettings(){
   $("#modelSel").innerHTML = opts.length ? opts.map(n=>`<option ${n===cfg.model?"selected":""}>${esc(n)}</option>`).join("")
     : `<option value="">（キーを保存すると自動で選びます）</option>`;
   $("#modelHint").textContent = cfg.model ? "ふだんはこのままでOK。AIが止まったときに別のモデルを選ぶと動くことがあります。" : "";
+  $("#curVer").textContent=VERSION;
   $("#todayCount").textContent=(cfg.usage?.[today()]||0)+"回";
   $("#legacyBox").hidden = !(lsGet("ideaNote.v1",{ideas:[]}).ideas||[]).length;
 }
@@ -720,7 +730,8 @@ $("#modelSel").onchange=()=>{ cfg.model=$("#modelSel").value; saveCfg(); toast("
 
 $("#exportBtn").onclick=async()=>{
   const d=new Date(), name=`IdeaNote_曼荼羅_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.json`;
-  const blob=new Blob([JSON.stringify({app:"IdeaNote",version:VERSION,exported:d.toISOString(),...db})],{type:"application/json"});
+  const extra=$("#expKey").checked&&cfg.apiKey?{apiKey:cfg.apiKey,model:cfg.model,models:cfg.models}:{};
+  const blob=new Blob([JSON.stringify({app:"IdeaNote",version:VERSION,exported:d.toISOString(),...db,...extra})],{type:"application/json"});
   const file=new File([blob],name,{type:"application/json"});
   if(navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file],title:name}); return; }catch(e){ if(e.name==="AbortError") return; }
@@ -736,7 +747,9 @@ $("#importFile").onchange=async e=>{
     const have=new Set(db.mandalas.map(m=>m.id)); let n=0;
     d.mandalas.forEach(m=>{ if(m&&m.id&&m.nodes&&m.rootId&&!have.has(m.id)){ db.mandalas.push(m); n++; }});
     db.mandalas.sort((a,b)=>b.updated.localeCompare(a.updated)); save();
-    toast(`📥 ${n}件の曼荼羅を読み込みました`);
+    let kmsg="";
+    if(d.apiKey && !cfg.apiKey){ cfg.apiKey=d.apiKey; cfg.model=d.model||cfg.model; cfg.models=d.models||cfg.models; saveCfg(); kmsg="・APIキーも戻しました"; }
+    toast(`📥 ${n}件の曼荼羅を読み込みました${kmsg}`); renderSettings();
   }catch(_){ toast("このファイルは読み込めません"); }
   e.target.value="";
 };
@@ -745,6 +758,27 @@ $("#legacyCopy").onclick=async()=>{
   const t=ideas.map(i=>[`■ ${i.title||"（無題）"}`,i.theme&&`テーマ：${i.theme}`,i.memo].filter(Boolean).join("\n")).join("\n\n");
   try{ await navigator.clipboard.writeText(t); toast("📋 コピーしました"); }catch(e){ toast("コピーできませんでした"); }
 };
+
+/* ---------- 更新 ---------- */
+async function latestVersion(){
+  try{ const r=await fetch("version.json?t="+Date.now(),{cache:"no-store"}); if(!r.ok) return null; return (await r.json()).version; }catch(e){ return null; }
+}
+function doUpdate(){ location.replace(location.pathname+"?v="+Date.now()); }
+async function checkUpdate(manual){
+  const v=await latestVersion();
+  if(!v){ if(manual) toast("確認できませんでした。電波を確認してください"); return; }
+  if(v!==VERSION){
+    if(manual){ toast(`${v} に更新します…`); setTimeout(doUpdate,600); return; }
+    $("#updText").textContent=`新しい版（${v}）があります`; $("#updBar").hidden=false; $("#updBar").style.display="flex";
+  }else if(manual){
+    toast("最新版です（"+VERSION+"）。アップ直後は反映まで10分ほどかかることがあります",3600);
+  }
+}
+$("#updCheck").onclick=()=>checkUpdate(true);
+$("#updGo").onclick=doUpdate;
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) checkUpdate(false); });
+if(location.protocol.startsWith("http")) checkUpdate(false);
+if(location.search.includes("v=")) history.replaceState(null,"",location.pathname);
 
 /* ---------- 開始 ---------- */
 $("#ver").textContent=VERSION;
