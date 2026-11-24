@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Idea Note</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Idea Note">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#FFFFFF">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-512.png">
+<link rel="manifest" href="manifest.json">
+<style>
+:root{
+  --yellow:#FFC928; --yellow-soft:#FFF4CC; --ink:#2B2B2B; --sub:#7A7A7A;
+  --line:#ECECEC; --bg:#FAFAF7; --card:#FFFFFF; --danger:#D9534F;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;font-size:16px}
+header{position:sticky;top:0;z-index:5;background:#fff;border-bottom:3px solid var(--yellow);
+  padding:calc(env(safe-area-inset-top) + 10px) 16px 10px}
+header h1{margin:0;font-size:19px;font-weight:700;display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+header h1 .by{font-size:13px;font-weight:400;color:var(--sub)}
+header h1 .ver{font-size:12px;color:#5A4300;background:var(--yellow-soft);padding:1px 7px;border-radius:9px}
+main{padding:14px 14px calc(env(safe-area-inset-bottom) + 90px)}
+.page{display:none}.page.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:14px}
+.card h2{margin:0 0 10px;font-size:16px;display:flex;align-items:center;gap:6px}
+.hint{color:var(--sub);font-size:13px;margin:0 0 10px;line-height:1.5}
+label{display:block;font-size:13px;color:var(--sub);margin:10px 0 4px}
+input[type=text],input[type=search],textarea{width:100%;font:inherit;font-size:16px;padding:10px 12px;
+  border:1px solid #DDD;border-radius:10px;background:#fff;color:var(--ink)}
+textarea{min-height:84px;resize:vertical;line-height:1.5}
+input:focus,textarea:focus{outline:none;border-color:var(--yellow);box-shadow:0 0 0 3px var(--yellow-soft)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{border:1px solid #DDD;background:#fff;border-radius:20px;padding:7px 14px;font:inherit;font-size:14px;color:var(--ink)}
+.chip.on{background:var(--yellow);border-color:var(--yellow);font-weight:700}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:0;border-radius:11px;
+  padding:11px 16px;font:inherit;font-size:15px;font-weight:700;background:var(--yellow);color:#3B2C00}
+.btn.sub{background:#F1F1EE;color:var(--ink);font-weight:600}
+.btn.danger{background:#fff;color:var(--danger);border:1px solid #F0C9C8}
+.btn:active{transform:scale(.97)}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}.row .btn{flex:1}
+.combo{display:grid;gap:8px;margin:4px 0}
+.combo div{background:var(--yellow-soft);border-radius:10px;padding:10px 12px}
+.combo small{display:block;color:#8A6A00;font-size:12px}
+.combo b{font-size:17px}
+.qcard{background:var(--yellow);border-radius:12px;padding:18px 14px;font-size:18px;font-weight:700;text-align:center;line-height:1.5;color:#3B2C00}
+.search{display:flex;gap:8px}.search input{flex:1}
+.filter{margin:10px 0 4px}
+.item{background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:10px}
+.item .top{display:flex;align-items:flex-start;gap:8px}
+.item .title{flex:1;font-weight:700;line-height:1.4;word-break:break-word}
+.item .memo{color:#555;font-size:14px;margin-top:6px;line-height:1.5;white-space:pre-wrap;word-break:break-word;
+  display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.item .meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;font-size:12px;color:var(--sub);align-items:center}
+.tag{background:#F1F1EE;border-radius:8px;padding:2px 8px;color:#555}
+.star{border:0;background:none;font-size:22px;line-height:1;padding:0 2px;color:#D0D0D0}
+.star.on{color:var(--yellow)}
+.empty{text-align:center;color:var(--sub);padding:30px 10px;line-height:1.7}
+nav{position:fixed;left:0;right:0;bottom:0;z-index:6;background:#fff;border-top:1px solid var(--line);
+  display:flex;padding-bottom:env(safe-area-inset-bottom)}
+nav button{flex:1;border:0;background:none;padding:9px 0 8px;font:inherit;font-size:11px;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav button .ic{font-size:22px;line-height:1}
+nav button.on{color:#3B2C00;font-weight:700}
+nav button.on .ic{filter:none}
+#sheet{position:fixed;inset:0;z-index:10;background:rgba(0,0,0,.35);display:none;align-items:flex-end}
+#sheet.on{display:flex}
+#sheet .box{background:#fff;width:100%;max-height:92vh;overflow:auto;border-radius:18px 18px 0 0;
+  padding:16px 16px calc(env(safe-area-inset-bottom) + 18px)}
+#sheet h3{margin:0 0 4px;font-size:17px}
+.sec{margin-top:16px;padding-top:12px;border-top:1px dashed #E3E3E3}
+.sec h4{margin:0;font-size:14px;color:#8A6A00}
+#toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 80px);transform:translateX(-50%);
+  background:#2B2B2B;color:#fff;padding:10px 16px;border-radius:20px;font-size:14px;opacity:0;transition:opacity .25s;pointer-events:none;z-index:20;white-space:nowrap}
+#toast.on{opacity:.95}
+.count{font-size:13px;color:var(--sub);margin:4px 2px 10px}
+</style>
+</head>
+<body>
+<header><h1>Idea Note <span class="by">by Urushihara</span> <span class="ver" id="ver"></span></h1></header>
+
+<main>
+<!-- 発想 -->
+<section class="page on" id="p-think">
+  <div class="card">
+    <h2>🎯 テーマ</h2>
+    <input type="text" id="theme" placeholder="例：釣りのアプリ、O. Henryの動画、なんでも">
+    <label>ジャンル</label>
+    <div class="chips" id="genres"></div>
+  </div>
+
+  <div class="card">
+    <h2>🎲 ランダム組み合わせ</h2>
+    <p class="hint">言葉をくじ引きで組み合わせます。思いもよらない組み合わせからヒントを探してください。</p>
+    <div class="combo" id="combo"></div>
+    <div class="row">
+      <button class="btn sub" id="comboNext">🎲 もう一回</button>
+      <button class="btn" id="comboSave">⭐ 保存</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>🃏 発想カード</h2>
+    <p class="hint">テーマにこの問いをぶつけて、思いついたことを書いてください。</p>
+    <div class="qcard" id="qcard"></div>
+    <div class="row"><button class="btn sub" id="qNext">🃏 次のカード</button></div>
+    <label>思いついたこと</label>
+    <textarea id="qAnswer" placeholder="ここに書く"></textarea>
+    <div class="row"><button class="btn" id="qSave">⭐ 保存</button></div>
+  </div>
+
+  <div class="card">
+    <h2>✏️ すぐメモ</h2>
+    <input type="text" id="quickTitle" placeholder="アイデアを一言で">
+    <label>くわしく（なくてもOK）</label>
+    <textarea id="quickMemo"></textarea>
+    <div class="row"><button class="btn" id="quickSave">⭐ 保存</button></div>
+  </div>
+</section>
+
+<!-- アイデア帳 -->
+<section class="page" id="p-note">
+  <div class="search"><input type="search" id="q" placeholder="🔍 さがす"></div>
+  <div class="chips filter" id="filters"></div>
+  <div class="count" id="count"></div>
+  <div id="list"></div>
+</section>
+
+<!-- 設定 -->
+<section class="page" id="p-set">
+  <div class="card">
+    <h2>💾 バックアップ</h2>
+    <p class="hint">アイデアはこのiPhoneの中にだけ保存されます。Safariは長く使わないとデータを消すことがあるので、ときどき書き出してください。</p>
+    <div class="row"><button class="btn" id="exportBtn">📤 書き出す（ファイル）</button></div>
+    <div class="row"><button class="btn sub" id="copyAllBtn">📋 全部を文章でコピー</button></div>
+    <div class="row"><button class="btn sub" id="importBtn">📥 読み込む（ファイル）</button></div>
+    <input type="file" id="importFile" accept=".json,application/json" hidden>
+  </div>
+  <div class="card">
+    <h2>ℹ️ このアプリ</h2>
+    <p class="hint" id="about" style="white-space:pre-line"></p>
+  </div>
+  <div class="card">
+    <h2>🗑 全部消す</h2>
+    <p class="hint">保存したアイデアをすべて消します。元に戻せません。</p>
+    <div class="row"><button class="btn danger" id="wipeBtn">全部消す</button></div>
+  </div>
+</section>
+</main>
+
+<nav>
+  <button data-p="think" class="on"><span class="ic">💡</span>発想</button>
+  <button data-p="note"><span class="ic">📒</span>アイデア帳</button>
+  <button data-p="set"><span class="ic">⚙️</span>設定</button>
+</nav>
+
+<div id="sheet"><div class="box" id="sheetBox"></div></div>
+<div id="toast"></div>
+
+<script>
+const VERSION = "v1.0";
+const KEY = "ideaNote.v1";
+
+/* ---------- 言葉のリスト ---------- */
+const GENRES = {
+  "アプリ": {
+    labels:["だれが","何をする","どんなとき"],
+    a:["一人暮らしの人","お年寄り","小学生","釣り好き","ギター初心者","ペットの飼い主","料理が苦手な人","忙しい親","旅行者","読書好き","目が疲れやすい人","在宅で働く人","ゲーム好き","外国人観光客","整理が苦手な人","早起きしたい人","動画を作る人","日記が続かない人"],
+    b:["記録する","自動で並べる","声だけで操作する","写真から判断する","毎日少しだけ通知する","他の人と比べる","ゲームにする","地図に残す","1分で終わらせる","AIに相談する","忘れる前に知らせる","ランキングにする","音で知らせる","1枚の画像にまとめる","くじ引きで決める","昔と比べる","お金をかけずに済ませる"],
+    c:["朝の支度中","通勤・移動中","寝る前","旅行先で","雨の日","休日の午後","料理しながら","散歩中","買い物中","待ち時間に","仕事の合間","夜中に目が覚めたとき","月末","誕生日","大掃除のとき"]
+  },
+  "動画": {
+    labels:["題材","見せ方","工夫"],
+    a:["昔の名作小説","身近な道具","ことわざ","世界の昔話","古い写真","動物の一日","失敗談","有名な発明","季節の行事","町の看板","食べ物の歴史","古い歌","手紙","雑学","名言"],
+    b:["アニメにする","1分で見せる","クイズにする","before／afterで見せる","語り手が話しかける","手描き風にする","子ども向けにやさしくする","ランキングにする","実験してみる","比べて見せる","シリーズにする","結末から見せる","声だけで聞かせる"],
+    c:["最後にどんでん返し","毎回同じ決めゼリフ","字幕で二か国語","BGMで雰囲気を変える","視聴者に質問して終わる","3つのポイントにしぼる","1話完結","続きが気になる終わり方","昔と今を並べる","短いショート版も作る"]
+  },
+  "創作": {
+    labels:["主人公","出来事","舞台"],
+    a:["年老いた郵便配達人","しゃべる猫","記憶をなくした画家","引退した泥棒","ロボットの子ども","嘘がつけない少年","売れない手品師","最後の灯台守","雨を集める少女","迷子のゆうれい","小さな町の医者","時計職人"],
+    b:["大切なものをなくす","知らない人から手紙が届く","ひとつだけ願いがかなう","昔の約束を思い出す","正体を隠している","贈り物を間違える","一日だけ入れ替わる","最後の一回のチャンス","思いがけない遺産","古い地図を見つける"],
+    c:["クリスマスの夜","海辺の小さな町","雪の降る駅","大都会の屋根裏部屋","100年前の港町","閉店間際のパン屋","夜行列車","山奥の宿","未来の図書館","にぎやかな市場"]
+  },
+  "その他": {
+    labels:["だれに","何を","どうやって"],
+    a:["自分","家族","近所の人","子ども","お年寄り","友だち","初心者","忙しい人","趣味の仲間","お客さん","未来の自分","まだ会ったことがない人"],
+    b:["楽しみ","安心","時間","思い出","学び","健康","お金の節約","つながり","整理整とん","驚き","自信","ひらめき"],
+    c:["毎日少しずつ","無料で","道具を使わずに","ゲーム感覚で","一緒にやって","記録を残して","見える形にして","声に出して","1回だけ大胆に","季節ごとに","くじ引きで","人に教えて"]
+  }
+};
+
+const QUESTIONS = [
+  "逆にしたらどうなる？","使う人を変えたら？","1分でできるようにしたら？","他のものと組み合わせたら？",
+  "完全に無料でやるなら？","子どもでも使えるようにしたら？","10倍大きくしたら？","一番めんどうな部分を消したら？",
+  "声だけで使えたら？","毎日使いたくなるには？","全然ちがう分野で使ったら？","一番困っているのはだれ？",
+  "今あるものの不満は何？","時間を半分にするには？","全部自動にしたら？","見た目をがらっと変えたら？",
+  "ゲームにしたら？","100年前ならどうやっていた？","10年後ならどうなっている？","お年寄り向けにしたら？",
+  "1つの機能だけ残すなら？","お金を払ってでも欲しいのはどこ？","人に話したくなるのはどこ？","失敗したらどうなる？それを防ぐには？",
+  "外国の人が使ったら？","雨の日・夜中ならどう使う？","友だちと一緒に使うなら？","捨てていいものは何？"
+];
+
+/* ---------- データ ---------- */
+let db = load();
+function load(){
+  try{ const d = JSON.parse(localStorage.getItem(KEY)); if(d && Array.isArray(d.ideas)) return d; }catch(e){}
+  return {ideas:[]};
+}
+function save(){
+  try{ localStorage.setItem(KEY, JSON.stringify(db)); }catch(e){ toast("保存できませんでした"); }
+}
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+function addIdea(o){
+  const now = new Date().toISOString();
+  const idea = Object.assign({
+    id:uid(), parentId:null, title:"", memo:"", theme:"", genre:"", source:"メモ",
+    tags:[], fav:false, plan:{goal:"",user:"",features:""}, created:now, updated:now
+  }, o);
+  db.ideas.unshift(idea); save(); return idea;
+}
+
+/* ---------- 便利 ---------- */
+const $ = s => document.querySelector(s);
+const esc = s => String(s??"").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pick = a => a[Math.floor(Math.random()*a.length)];
+let toastT;
+function toast(t){ const el=$("#toast"); el.textContent=t; el.classList.add("on"); clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove("on"),1800); }
+function fmtDate(iso){ const d=new Date(iso); return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`; }
+
+$("#ver").textContent = VERSION;
+$("#about").textContent = `Idea Note by Urushihara ${VERSION}\n第1段階：AIなしの発想ツールとアイデア帳。`;
+
+/* ---------- 画面切り替え ---------- */
+document.querySelectorAll("nav button").forEach(b=>{
+  b.onclick=()=>{
+    document.querySelectorAll("nav button").forEach(x=>x.classList.toggle("on",x===b));
+    document.querySelectorAll(".page").forEach(p=>p.classList.toggle("on",p.id==="p-"+b.dataset.p));
+    if(b.dataset.p==="note") renderList();
+    window.scrollTo(0,0);
+  };
+});
+
+/* ---------- 発想 ---------- */
+let genre = "アプリ";
+function renderGenres(){
+  $("#genres").innerHTML = Object.keys(GENRES).map(g=>`<button class="chip ${g===genre?"on":""}" data-g="${g}">${g}</button>`).join("");
+  $("#genres").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{ genre=c.dataset.g; renderGenres(); newCombo(); });
+}
+let combo = [];
+function newCombo(){
+  const G = GENRES[genre];
+  combo = [pick(G.a), pick(G.b), pick(G.c)];
+  $("#combo").innerHTML = combo.map((w,i)=>`<div><small>${G.labels[i]}</small><b>${esc(w)}</b></div>`).join("");
+}
+function newQ(){
+  let q; do{ q = pick(QUESTIONS); }while(q===$("#qcard").textContent && QUESTIONS.length>1);
+  $("#qcard").textContent = q;
+}
+$("#comboNext").onclick = newCombo;
+$("#comboSave").onclick = ()=>{
+  addIdea({ title: combo.join(" × "), theme: $("#theme").value.trim(), genre, source:"ランダム組み合わせ",
+    memo: GENRES[genre].labels.map((l,i)=>`${l}：${combo[i]}`).join("\n") });
+  toast("⭐ アイデア帳に保存しました");
+};
+$("#qNext").onclick = newQ;
+$("#qSave").onclick = ()=>{
+  const ans = $("#qAnswer").value.trim();
+  if(!ans){ toast("思いついたことを書いてください"); return; }
+  const first = ans.split("\n")[0].slice(0,40);
+  addIdea({ title:first, memo:`問い：${$("#qcard").textContent}\n${ans}`, theme:$("#theme").value.trim(), genre, source:"発想カード" });
+  $("#qAnswer").value=""; newQ(); toast("⭐ アイデア帳に保存しました");
+};
+$("#quickSave").onclick = ()=>{
+  const t = $("#quickTitle").value.trim(), m = $("#quickMemo").value.trim();
+  if(!t && !m){ toast("アイデアを書いてください"); return; }
+  addIdea({ title: t || m.split("\n")[0].slice(0,40), memo:m, theme:$("#theme").value.trim(), genre, source:"メモ" });
+  $("#quickTitle").value=""; $("#quickMemo").value=""; toast("⭐ アイデア帳に保存しました");
+};
+
+/* ---------- アイデア帳 ---------- */
+let filter = "すべて";
+function allTags(){ const s=new Set(); db.ideas.forEach(i=>i.tags.forEach(t=>s.add(t))); return [...s]; }
+function renderFilters(){
+  const opts = ["すべて","⭐お気に入り", ...Object.keys(GENRES), ...allTags().map(t=>"#"+t)];
+  if(!opts.includes(filter)) filter="すべて";
+  $("#filters").innerHTML = opts.map(o=>`<button class="chip ${o===filter?"on":""}" data-f="${esc(o)}">${esc(o)}</button>`).join("");
+  $("#filters").querySelectorAll(".chip").forEach(c=>c.onclick=()=>{ filter=c.dataset.f; renderList(); });
+}
+function renderList(){
+  renderFilters();
+  const q = $("#q").value.trim().toLowerCase();
+  let items = db.ideas.filter(i=>{
+    if(filter==="⭐お気に入り" && !i.fav) return false;
+    if(GENRES[filter] && i.genre!==filter) return false;
+    if(filter.startsWith("#") && !i.tags.includes(filter.slice(1))) return false;
+    if(q){
+      const hay = [i.title,i.memo,i.theme,i.tags.join(" "),i.plan.goal,i.plan.user,i.plan.features].join(" ").toLowerCase();
+      if(!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  $("#count").textContent = `${items.length}件 ／ 全${db.ideas.length}件`;
+  if(!items.length){
+    $("#list").innerHTML = `<div class="empty">${db.ideas.length?"見つかりませんでした":"まだアイデアがありません。<br>「💡 発想」で保存してみてください。"}</div>`;
+    return;
+  }
+  $("#list").innerHTML = items.map(i=>`
+    <div class="item" data-id="${i.id}">
+      <div class="top">
+        <div class="title">${esc(i.title||"（無題）")}</div>
+        <button class="star ${i.fav?"on":""}" data-star="${i.id}">★</button>
+      </div>
+      ${i.memo?`<div class="memo">${esc(i.memo)}</div>`:""}
+      <div class="meta">
+        <span>${fmtDate(i.created)}</span>
+        ${i.genre?`<span class="tag">${esc(i.genre)}</span>`:""}
+        ${i.theme?`<span class="tag">🎯${esc(i.theme)}</span>`:""}
+        ${i.tags.map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}
+        ${(i.plan.goal||i.plan.user||i.plan.features)?`<span class="tag">📝たたき台あり</span>`:""}
+      </div>
+    </div>`).join("");
+  $("#list").querySelectorAll(".item").forEach(el=>{
+    el.onclick = e=>{
+      const s = e.target.closest("[data-star]");
+      if(s){ const it=db.ideas.find(x=>x.id===s.dataset.star); it.fav=!it.fav; save(); renderList(); return; }
+      openEditor(el.dataset.id);
+    };
+  });
+}
+$("#q").oninput = renderList;
+
+/* ---------- 編集シート ---------- */
+function openEditor(id){
+  const i = db.ideas.find(x=>x.id===id); if(!i) return;
+  $("#sheetBox").innerHTML = `
+    <h3>アイデアを編集</h3>
+    <p class="hint">${esc(i.source)}・${fmtDate(i.created)}</p>
+    <label>アイデア</label><input type="text" id="eTitle" value="${esc(i.title)}">
+    <label>メモ</label><textarea id="eMemo">${esc(i.memo)}</textarea>
+    <label>テーマ</label><input type="text" id="eTheme" value="${esc(i.theme)}">
+    <label>タグ（スペース区切り）</label><input type="text" id="eTags" value="${esc(i.tags.join(" "))}" placeholder="例：iPhone 動画 すぐ作れる">
+    <div class="sec">
+      <h4>📝 計画のたたき台</h4>
+      <label>目的（何のため？）</label><textarea id="eGoal" style="min-height:60px">${esc(i.plan.goal)}</textarea>
+      <label>使う人（だれのため？）</label><textarea id="eUser" style="min-height:60px">${esc(i.plan.user)}</textarea>
+      <label>主な機能（何ができる？）</label><textarea id="eFeat">${esc(i.plan.features)}</textarea>
+    </div>
+    <div class="row"><button class="btn" id="eSave">保存</button><button class="btn sub" id="eClose">閉じる</button></div>
+    <div class="row"><button class="btn sub" id="eCopy">📋 文章でコピー</button></div>
+    <div class="row"><button class="btn danger" id="eDel">このアイデアを消す</button></div>`;
+  $("#sheet").classList.add("on");
+  $("#eClose").onclick = closeSheet;
+  $("#eSave").onclick = ()=>{
+    i.title=$("#eTitle").value.trim(); i.memo=$("#eMemo").value.trim(); i.theme=$("#eTheme").value.trim();
+    i.tags=$("#eTags").value.split(/[\s　,、]+/).map(t=>t.replace(/^#/,"")).filter(Boolean);
+    i.plan={goal:$("#eGoal").value.trim(),user:$("#eUser").value.trim(),features:$("#eFeat").value.trim()};
+    i.updated=new Date().toISOString(); save(); closeSheet(); renderList(); toast("保存しました");
+  };
+  $("#eCopy").onclick = ()=> copyText(ideaText(i));
+  $("#eDel").onclick = ()=>{
+    if(!confirm("このアイデアを消しますか？")) return;
+    db.ideas = db.ideas.filter(x=>x.id!==i.id); save(); closeSheet(); renderList(); toast("消しました");
+  };
+}
+function closeSheet(){ $("#sheet").classList.remove("on"); }
+$("#sheet").onclick = e=>{ if(e.target.id==="sheet") closeSheet(); };
+
+/* ---------- 文章・コピー ---------- */
+function ideaText(i){
+  const L=[`■ ${i.title||"（無題）"}`];
+  if(i.theme) L.push(`テーマ：${i.theme}`);
+  if(i.genre) L.push(`ジャンル：${i.genre}`);
+  if(i.memo) L.push(i.memo);
+  if(i.tags.length) L.push("タグ："+i.tags.map(t=>"#"+t).join(" "));
+  if(i.plan.goal||i.plan.user||i.plan.features){
+    L.push("【計画のたたき台】");
+    if(i.plan.goal) L.push("目的："+i.plan.goal);
+    if(i.plan.user) L.push("使う人："+i.plan.user);
+    if(i.plan.features) L.push("主な機能："+i.plan.features);
+  }
+  return L.join("\n");
+}
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); toast("📋 コピーしました"); }
+  catch(e){
+    const ta=document.createElement("textarea"); ta.value=t; document.body.appendChild(ta); ta.select();
+    try{ document.execCommand("copy"); toast("📋 コピーしました"); }catch(_){ toast("コピーできませんでした"); }
+    ta.remove();
+  }
+}
+
+/* ---------- バックアップ ---------- */
+$("#exportBtn").onclick = async ()=>{
+  const d=new Date(), name=`IdeaNote_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,"0")}${String(d.getDate()).padStart(2,"0")}.json`;
+  const blob=new Blob([JSON.stringify({app:"IdeaNote",version:VERSION,exported:d.toISOString(),...db},null,1)],{type:"application/json"});
+  const file=new File([blob],name,{type:"application/json"});
+  if(navigator.canShare && navigator.canShare({files:[file]})){
+    try{ await navigator.share({files:[file],title:name}); return; }catch(e){ if(e.name==="AbortError") return; }
+  }
+  const a=document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),3000);
+};
+$("#copyAllBtn").onclick = ()=>{
+  if(!db.ideas.length){ toast("アイデアがありません"); return; }
+  copyText(db.ideas.map(ideaText).join("\n\n"));
+};
+$("#importBtn").onclick = ()=> $("#importFile").click();
+$("#importFile").onchange = async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(!Array.isArray(d.ideas)) throw 0;
+    const have=new Set(db.ideas.map(i=>i.id)); let n=0;
+    d.ideas.forEach(i=>{ if(i && i.id && !have.has(i.id)){
+      db.ideas.push(Object.assign({parentId:null,tags:[],plan:{goal:"",user:"",features:""},memo:"",theme:"",genre:"",source:"メモ",fav:false},i)); n++; }});
+    db.ideas.sort((a,b)=>b.created.localeCompare(a.created)); save();
+    toast(`📥 ${n}件 読み込みました`);
+  }catch(_){ toast("このファイルは読み込めません"); }
+  e.target.value="";
+};
+$("#wipeBtn").onclick = ()=>{
+  if(!db.ideas.length){ toast("アイデアはありません"); return; }
+  if(!confirm(`${db.ideas.length}件のアイデアをすべて消します。よろしいですか？`)) return;
+  if(!confirm("本当に消しますか？元に戻せません。")) return;
+  db={ideas:[]}; save(); toast("すべて消しました");
+};
+
+/* ---------- 開始 ---------- */
+renderGenres(); newCombo(); newQ();
+</script>
+</body>
+</html>
