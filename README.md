@@ -1,0 +1,2 @@
+# IdeaNote
+Uploaded with GitUp
